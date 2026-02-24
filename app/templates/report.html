@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4 d-flex justify-content-between align-items-end">
+  <div>
+    <h2><i class="bi bi-bar-chart-line me-2"></i>Point-in-Time Reports</h2>
+    <p class="text-muted">Take snapshots to track your data removal status over time.</p>
+  </div>
+  <form method="POST" action="/report/take" class="d-flex gap-2">
+    <input type="text" name="label" class="form-control form-control-sm"
+           placeholder="Snapshot label (optional)" style="width:220px" />
+    <button type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-camera me-1"></i> Take Snapshot
+    </button>
+  </form>
+</div>
+
+<div class="row g-4">
+  <!-- ── Snapshot List ──────────────────────────────────────────────────── -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history me-1"></i> Saved Snapshots</div>
+      <div class="list-group list-group-flush" style="max-height:520px; overflow-y:auto;">
+        {% if snapshots %}
+          {% for s in snapshots %}
+          <a href="/report/{{ s.id }}"
+             class="list-group-item list-group-item-action {% if snapshot and snapshot.id == s.id %}active{% endif %}">
+            <div class="fw-semibold small">{{ s.label or 'Snapshot #' ~ s.id }}</div>
+            <div class="text-muted" style="font-size:.78rem;">{{ s.taken_at[:16] }}</div>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="p-3 text-muted small">No snapshots yet. Take one above.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Snapshot Detail ───────────────────────────────────────────────── -->
+  <div class="col-lg-8">
+    {% if snapshot %}
+    {% set status_badges = {
+      'confirmed':       'success',
+      'submitted':       'primary',
+      'pending':         'warning',
+      'manual_required': 'info',
+      'error':           'danger',
+      'denied':          'danger',
+      'expired':         'secondary'
+    } %}
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-calendar-check me-1"></i>
+          <strong>{{ snapshot.label or 'Snapshot #' ~ snapshot.id }}</strong>
+          <span class="text-muted ms-2 small">{{ snapshot.taken_at[:16] }}</span>
+        </span>
+        <span class="badge bg-secondary">{{ snapshot.data | length }} broker(s)</span>
+      </div>
+
+      <!-- Summary badges -->
+      {% set counts = {} %}
+      {% for row in snapshot.data %}
+        {% if row.status in counts %}
+          {% set _ = counts.update({row.status: counts[row.status] + 1}) %}
+        {% else %}
+          {% set _ = counts.update({row.status: 1}) %}
+        {% endif %}
+      {% endfor %}
+      <div class="card-body border-bottom d-flex flex-wrap gap-2">
+        {% for status, count in counts.items() %}
+        <span class="badge bg-{{ status_badges.get(status, 'secondary') }} fs-6">
+          {{ status | replace('_', ' ') | title }}: {{ count }}
+        </span>
+        {% endfor %}
+      </div>
+
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th>Broker</th>
+                <th>Status at snapshot</th>
+                <th>Submitted at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in snapshot.data %}
+              <tr>
+                <td class="fw-semibold small">{{ row.broker_name }}</td>
+                <td>
+                  <span class="badge bg-{{ status_badges.get(row.status, 'secondary') }}">
+                    {{ row.status | replace('_', ' ') | title }}
+                  </span>
+                </td>
+                <td class="text-muted small">{{ (row.submitted_at or '—')[:16] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {% elif not snapshots %}
+      <div class="card">
+        <div class="card-body text-center py-5 text-muted">
+          <i class="bi bi-camera fs-1 d-block mb-3 opacity-25"></i>
+          <p>Take your first snapshot to start tracking status over time.</p>
+          <p class="small">Snapshots record the current status of every broker at a specific moment — useful for comparing before/after.</p>
+        </div>
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="card-body text-center py-5 text-muted">
+          <i class="bi bi-arrow-left-circle fs-1 d-block mb-3 opacity-25"></i>
+          <p>Select a snapshot from the list to view it.</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

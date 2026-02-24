@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Run Scan{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <h2><i class="bi bi-play-circle me-2"></i>Run Opt-Out Scan</h2>
+  <p class="text-muted">Select brokers and start an automated opt-out run.</p>
+</div>
+
+<div class="row g-4">
+  <!-- ── Broker Selector ──────────────────────────────────────────────── -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-building me-1"></i> Select Brokers</span>
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAll(true)">All</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="selectAll(false)">None</button>
+        </div>
+      </div>
+      <div class="card-body p-0" style="max-height: 480px; overflow-y: auto;">
+        <form id="run-form">
+          {% set method_colors = {'web_form': 'primary', 'email': 'info', 'manual': 'secondary'} %}
+          {% for broker in brokers %}
+          <div class="broker-item d-flex align-items-center px-3 py-2 border-bottom">
+            <input type="checkbox" class="form-check-input me-2 broker-check"
+                   name="broker_ids" value="{{ broker.id }}" id="b-{{ broker.id }}" checked />
+            <label class="form-check-label flex-grow-1 small" for="b-{{ broker.id }}">
+              <span class="fw-semibold">{{ broker.name }}</span>
+              <span class="badge bg-{{ method_colors.get(broker.method, 'secondary') }} ms-1" style="font-size:.65rem;">
+                {{ broker.method | replace('_',' ') }}
+              </span>
+            </label>
+          </div>
+          {% endfor %}
+        </form>
+      </div>
+      <div class="card-footer">
+        <button id="run-btn" class="btn btn-primary w-100"
+                {% if in_progress %}disabled{% endif %}
+                onclick="startRun()">
+          <i class="bi bi-play-fill me-1"></i>
+          {% if in_progress %}Run in Progress…{% else %}Start Selected{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Live Log ─────────────────────────────────────────────────────── -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-terminal me-1"></i> Live Log</span>
+        <span id="run-badge" class="badge bg-secondary">Idle</span>
+      </div>
+      <div class="card-body p-0">
+        <pre id="log-output" class="run-log">Waiting for scan to start…</pre>
+      </div>
+      <div class="card-footer text-muted small" id="run-summary" style="display:none">
+        <!-- Summary appears here when done -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-secondary mt-4 d-flex gap-2">
+  <i class="bi bi-info-circle-fill text-muted mt-1"></i>
+  <div class="small text-muted">
+    <strong>Automation level:</strong>
+    Brokers with a <span class="badge bg-primary">web form</span> handler run via headless Chromium.
+    <span class="badge bg-info">Email</span> brokers send via SMTP (configure in <code>.env</code>).
+    <span class="badge bg-secondary">Manual</span> brokers are logged as <em>manual_required</em>
+    — visit the link in the Brokers page to complete them yourself.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function selectAll(state) {
+    document.querySelectorAll('.broker-check').forEach(cb => cb.checked = state);
+  }
+
+  function startRun() {
+    const btn = document.getElementById('run-btn');
+    const badge = document.getElementById('run-badge');
+    const log = document.getElementById('log-output');
+    const summary = document.getElementById('run-summary');
+
+    const checked = [...document.querySelectorAll('.broker-check:checked')].map(cb => cb.value);
+    if (checked.length === 0) {
+      alert('Select at least one broker.');
+      return;
+    }
+
+    // Build form data
+    const formData = new FormData();
+    checked.forEach(id => formData.append('broker_ids', id));
+
+    btn.disabled = true;
+    badge.className = 'badge bg-warning text-dark';
+    badge.textContent = 'Running…';
+    log.textContent = '';
+    summary.style.display = 'none';
+
+    // Start the run
+    fetch('/run/start', { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          log.textContent = 'Error: ' + data.error;
+          btn.disabled = false;
+          badge.className = 'badge bg-danger';
+          badge.textContent = 'Error';
+          return;
+        }
+        // Stream logs
+        const source = new EventSource('/run/stream');
+        source.onmessage = function(e) {
+          const item = JSON.parse(e.data);
+          log.textContent += item.msg + '\n';
+          log.scrollTop = log.scrollHeight;
+
+          if (item.done) {
+            source.close();
+            badge.className = 'badge bg-success';
+            badge.textContent = 'Done';
+            btn.disabled = false;
+            btn.textContent = '▶  Run Again';
+
+            if (item.result) {
+              const r = item.result;
+              summary.style.display = 'block';
+              summary.innerHTML =
+                `✅ <strong>${r.succeeded}</strong> submitted &nbsp;|&nbsp; ` +
+                `⚠️ <strong>${r.failed}</strong> manual/error &nbsp;|&nbsp; ` +
+                `Run ID: <code>${r.run_id}</code> &nbsp; ` +
+                `<a href="/requests?run_id=${r.run_id}">View requests →</a>`;
+            }
+          }
+        };
+
+        source.onerror = function() {
+          source.close();
+          badge.className = 'badge bg-danger';
+          badge.textContent = 'Disconnected';
+          btn.disabled = false;
+        };
+      })
+      .catch(err => {
+        log.textContent = 'Failed to start run: ' + err;
+        btn.disabled = false;
+        badge.className = 'badge bg-danger';
+        badge.textContent = 'Error';
+      });
+  }
+</script>
+{% endblock %}

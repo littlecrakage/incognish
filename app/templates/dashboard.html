@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+  <p class="text-muted">Overview of your data removal status.</p>
+</div>
+
+{% if not profile %}
+<div class="alert alert-warning d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+  <div>
+    <strong>Profile not set up yet.</strong>
+    <a href="/profile" class="alert-link ms-1">Fill in your profile</a> before running a scan.
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Summary Cards ──────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-card--blue">
+      <div class="stat-card__icon"><i class="bi bi-building"></i></div>
+      <div>
+        <div class="stat-card__value">{{ total_in_registry }}</div>
+        <div class="stat-card__label">Brokers in Registry</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-card--teal">
+      <div class="stat-card__icon"><i class="bi bi-send"></i></div>
+      <div>
+        <div class="stat-card__value">{{ brokers_contacted }}</div>
+        <div class="stat-card__label">Brokers Contacted</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-card--green">
+      <div class="stat-card__icon"><i class="bi bi-check-circle"></i></div>
+      <div>
+        <div class="stat-card__value">{{ statuses.get('confirmed', 0) }}</div>
+        <div class="stat-card__label">Confirmed Removed</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-card--orange">
+      <div class="stat-card__icon"><i class="bi bi-hourglass-split"></i></div>
+      <div>
+        <div class="stat-card__value">{{ statuses.get('pending', 0) + statuses.get('submitted', 0) }}</div>
+        <div class="stat-card__label">Pending Response</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- ── Status Breakdown ──────────────────────────────────────────────── -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-pie-chart me-1"></i> Status Breakdown
+      </div>
+      <div class="card-body">
+        {% if statuses %}
+          {% set status_colors = {
+            'confirmed': 'success',
+            'submitted': 'primary',
+            'pending':   'warning',
+            'manual_required': 'info',
+            'error':     'danger',
+            'denied':    'danger',
+            'expired':   'secondary'
+          } %}
+          {% for status, count in statuses.items() %}
+          <div class="mb-2">
+            <div class="d-flex justify-content-between mb-1">
+              <span>
+                <span class="badge bg-{{ status_colors.get(status, 'secondary') }}">
+                  {{ status | replace('_', ' ') | title }}
+                </span>
+              </span>
+              <span class="fw-semibold">{{ count }}</span>
+            </div>
+            <div class="progress" style="height: 6px;">
+              <div class="progress-bar bg-{{ status_colors.get(status, 'secondary') }}"
+                   style="width: {{ ((count / brokers_contacted) * 100) | int if brokers_contacted > 0 else 0 }}%">
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted text-center py-3">No data yet. <a href="/run">Run a scan</a> to get started.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Recent Runs ───────────────────────────────────────────────────── -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-1"></i> Recent Runs</span>
+        <a href="/run" class="btn btn-sm btn-primary">
+          <i class="bi bi-play-fill"></i> New Scan
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_runs %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Date</th>
+                <th>Brokers</th>
+                <th>Submitted</th>
+                <th>Manual/Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in recent_runs %}
+              <tr>
+                <td><code class="text-muted">{{ run.id }}</code></td>
+                <td class="text-muted small">{{ run.started_at[:16] }}</td>
+                <td>{{ run.total }}</td>
+                <td><span class="badge bg-success">{{ run.succeeded }}</span></td>
+                <td><span class="badge bg-warning text-dark">{{ run.failed }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <p class="text-muted text-center py-4">No runs yet. <a href="/run">Start your first scan.</a></p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Quick Actions ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mt-2">
+  <div class="col">
+    <div class="card">
+      <div class="card-body d-flex gap-3 flex-wrap">
+        <a href="/run" class="btn btn-primary">
+          <i class="bi bi-play-circle me-1"></i> Run Scan
+        </a>
+        <a href="/brokers" class="btn btn-outline-secondary">
+          <i class="bi bi-building me-1"></i> View Brokers
+        </a>
+        <a href="/requests" class="btn btn-outline-secondary">
+          <i class="bi bi-list-task me-1"></i> All Requests
+        </a>
+        <form method="POST" action="/report/take" class="d-inline">
+          <input type="hidden" name="label" value="Quick snapshot" />
+          <button type="submit" class="btn btn-outline-info">
+            <i class="bi bi-camera me-1"></i> Take Snapshot
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+  <h2><i class="bi bi-person-circle me-2"></i>My Profile</h2>
+  <p class="text-muted">This information is stored locally in your database and used to fill opt-out forms.</p>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-shield-lock me-1"></i> Personal Details
+        <span class="badge bg-success ms-2">Stored locally — never uploaded</span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/profile">
+          <div class="row g-3">
+            {% for key, label, input_type, required in fields %}
+            <div class="col-md-{% if key in ('first_name', 'last_name') %}6{% elif key == 'address' %}12{% else %}6{% endif %}">
+              <label class="form-label fw-semibold" for="{{ key }}">
+                {{ label }}
+                {% if required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <input
+                type="{{ input_type }}"
+                class="form-control"
+                id="{{ key }}"
+                name="{{ key }}"
+                value="{{ profile.get(key, '') }}"
+                {% if required %}required{% endif %}
+                {% if key == 'date_of_birth' %}placeholder="YYYY-MM-DD"{% endif %}
+                {% if key == 'phone' %}placeholder="+1-555-123-4567"{% endif %}
+              />
+            </div>
+            {% endfor %}
+          </div>
+
+          <hr class="my-4" />
+
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+              <i class="bi bi-info-circle me-1"></i>
+              Fields marked <span class="text-danger">*</span> are required for most opt-out forms.
+            </small>
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-save me-1"></i> Save Profile
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="alert alert-secondary mt-3 d-flex align-items-start gap-2">
+      <i class="bi bi-lock-fill mt-1 text-muted"></i>
+      <div class="small text-muted">
+        Your data is only stored in <code>db/tracker.db</code> on your machine.
+        The <code>db/</code> folder is gitignored and will never be pushed to GitHub.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
