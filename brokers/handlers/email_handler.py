@@ -50,14 +50,36 @@ class Handler(BaseHandler):
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain"))
 
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-
+            self._send(msg)
             return {"status": "submitted", "notes": f"Opt-out email sent to {opt_out_email}"}
         except Exception as exc:
             return {"status": "error", "notes": f"SMTP error: {exc}"}
+
+    def _send(self, msg):
+        """Try STARTTLS (port 587) first, fall back to SSL (port 465) on connection errors only."""
+        # Attempt 1: STARTTLS
+        starttls_failed = False
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+            return
+        except smtplib.SMTPAuthenticationError:
+            # Auth failed — no point retrying with SSL, same creds won't work
+            raise
+        except (smtplib.SMTPException, OSError):
+            # Connection/TLS issue — try SSL instead
+            starttls_failed = True
+
+        # Attempt 2: SSL on port 465 (only if STARTTLS had a connection error)
+        if starttls_failed:
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=30) as server:
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
 
     def _default_template(self) -> str:
         return (
