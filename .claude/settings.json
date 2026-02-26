@@ -4,7 +4,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:github.com)",
       "Bash(python -c \"import json; data = json.load\\(open\\(''brokers/registry.json''\\)\\); print\\(f''Valid JSON. Total brokers: {len\\(data[\"\"brokers\"\"]\\)}''\\)\")",
-      "WebFetch(domain:clustrmaps.com)"
+      "WebFetch(domain:clustrmaps.com)",
+      "Bash(python -c \":*)",
+      "Bash(ls brokers/handlers/*.py)"
     ]
   }
 }

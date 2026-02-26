@@ -1,7 +1,7 @@
 # 🔒 Incognish
 
 A self-hosted, personal data-broker opt-out tracker.
-Automates removal requests to 30+ data brokers and tracks every request status over time.
+Automates removal requests to 49 data brokers and tracks every request status over time.
 
 > **For personal use.** Your data never leaves your machine.
 
@@ -9,8 +9,9 @@ Automates removal requests to 30+ data brokers and tracks every request status o
 
 ## Features
 
-- **30+ data brokers** catalogued with opt-out methods and URLs
-- **Automated submissions** via headless browser (Playwright) for supported brokers
+- **49 data brokers** catalogued with opt-out methods and URLs
+- **Automated submissions** via headless browser (Playwright) for 12 brokers
+- **CAPTCHA solving** via [CapSolver](https://capsolver.com) for Turnstile-protected brokers (optional)
 - **Email opt-outs** via SMTP for email-based brokers (optional)
 - **Request tracking** — full history of every submission
 - **Point-in-time snapshots** — see what your status was on any past date
@@ -52,28 +53,78 @@ The app opens at **http://localhost:5000** automatically.
 
 ---
 
-## Optional: Email Opt-Outs
+## Automation Coverage
 
-Some brokers require an email opt-out. To automate these:
+### Fully Automated (Playwright)
 
-```bash
-cp .env.example .env
-# Edit .env with your SMTP credentials
-```
+These brokers run without any manual steps. Turnstile-protected ones require a CapSolver API key.
 
-For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833).
+| Broker | CAPTCHA | Notes |
+|--------|---------|-------|
+| TruePeopleSearch | — | Headless browser |
+| FastPeopleSearch | — | Headless browser |
+| FamilyTreeNow | — | Headless browser |
+| BeenVerified | Turnstile ¹ | Email verification to finalize |
+| PeopleFinders | Turnstile ¹ | Email confirmation to finalize |
+| Intelius | Turnstile ¹ | PeopleConnect suppression center — also covers ZabaSearch, TruthFinder, InstantCheckmate |
+| ZabaSearch | Turnstile ¹ | Same as Intelius |
+| ClustrMaps | Turnstile ¹ | Email confirmation to finalize |
+| VoterRecords | Cloudflare ² | Falls back to manual if blocked |
+| PublicRecordsNow | Cloudflare ² | Falls back to manual if blocked |
+| Smart Background Checks | Cloudflare ² | Falls back to manual if blocked |
+| ThatsThem | reCAPTCHA v2 ¹ | Falls back to manual if blocked |
+
+¹ Requires `CAPSOLVER_API_KEY` in `.env`
+² Cloudflare Enterprise — automation may be blocked depending on IP
+
+### Email Automated (SMTP)
+
+Requires `SMTP_*` credentials in `.env`.
+
+| Broker | Contact |
+|--------|---------|
+| CheckPeople | support@checkpeople.com |
+| Ancestry | privacy@ancestry.com |
+
+### Manual (35 brokers)
+
+The app shows you the exact opt-out URL and tracks when you complete it.
+
+Spokeo, WhitePages, Radaris, MyLife, SearchPeopleFree, NumLookup, Acxiom, Epsilon,
+TruthFinder, Instant Checkmate, Pipl, LexisNexis, Oracle Advertising (BlueKai),
+Verecor, Addresses.com, US Phone Book, 411.com, Nuwber, Advanced Background Checks,
+PeopleSearchNow, Cyber Background Checks, ZoomInfo, InfoTracer, USA People Search,
+Veripages, PeekYou, SearchQuarry, Social Catfish, SpyFly, NeighborReport,
+PeopleByName, PublicDataUSA, USA-Official, Rehold, UnMask
 
 ---
 
-## Automation Coverage
+## Optional: CAPTCHA Solving (CapSolver)
 
-| Method | Brokers | Notes |
-|---|---|---|
-| `web_form` (Playwright) | TruePeopleSearch, FastPeopleSearch, FamilyTreeNow | Headless browser |
-| `email` (SMTP) | Truthfinder, InstantCheckmate, CheckPeople, + more | Requires `.env` |
-| `manual` | All others | App logs URL + instructions, you submit manually |
+Some brokers (BeenVerified, PeopleFinders, Intelius, ZabaSearch, ClustrMaps, ThatsThem) require solving a Cloudflare Turnstile or reCAPTCHA challenge. Incognish integrates with [CapSolver](https://capsolver.com) to handle this automatically.
 
-Brokers with no handler are marked `manual_required` — the app shows you the exact URL and tracks when you do it.
+**Cost:** ~$0.80–1.00 per 1,000 solves. A full opt-out run uses ~5 solves — under $0.01/run. Minimum deposit is $5 (~1,250 runs).
+
+```bash
+cp .env.example .env
+# Add your key:
+# CAPSOLVER_API_KEY=your_key_here
+```
+
+Without a key, Turnstile-protected brokers fall back to `manual_required`.
+
+---
+
+## Optional: Email Opt-Outs
+
+Some brokers accept a GDPR/CCPA removal request by email. To automate these:
+
+```bash
+cp .env.example .env
+# Fill in your SMTP credentials
+```
+
+For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833).
 
 ---
 
@@ -91,7 +142,7 @@ PRs to improve the broker registry are welcome!
 
 - All data lives in `db/tracker.db` (SQLite) on your machine
 - `db/` is gitignored — never committed
-- No analytics, no telemetry, no external calls except to broker websites
+- No analytics, no telemetry, no external calls except to broker websites (and CapSolver if configured)
 
 ---
 
@@ -100,8 +151,12 @@ PRs to improve the broker registry are welcome!
 ```
 incognish/
 ├── brokers/
-│   ├── registry.json          # 30+ broker definitions
+│   ├── registry.json          # 49 broker definitions
 │   └── handlers/              # automation scripts per broker
+│       ├── base.py            # BaseHandler + shared stealth browser helpers
+│       ├── capsolver_helper.py # Turnstile / reCAPTCHA solving via CapSolver
+│       ├── email_handler.py   # SMTP email opt-outs
+│       └── <broker>.py        # one file per automated broker
 ├── core/
 │   ├── tracker.py             # SQLite DB operations
 │   └── engine.py              # opt-out orchestration
@@ -109,6 +164,7 @@ incognish/
 │   ├── routes/                # Flask blueprints
 │   ├── templates/             # Jinja2 HTML
 │   └── static/                # CSS
+├── .env.example               # copy to .env and fill in credentials
 ├── run.py                     # entry point
 └── requirements.txt
 ```
