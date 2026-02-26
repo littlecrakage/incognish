@@ -4,7 +4,16 @@
       "Bash(python -m venv venv)",
       "Bash(venv/Scripts/pip install -r requirements.txt)",
       "Bash(venv/Scripts/python -c \":*)",
-      "Bash(venv/Scripts/playwright install chromium)"
+      "Bash(venv/Scripts/playwright install chromium)",
+      "WebFetch(domain:www.zabasearch.com)",
+      "WebFetch(domain:www.publicrecordsnow.com)",
+      "WebFetch(domain:voterrecords.com)",
+      "WebFetch(domain:thatsthem.com)",
+      "WebFetch(domain:www.numlookup.com)",
+      "WebFetch(domain:www.smartbackgroundchecks.com)",
+      "WebFetch(domain:www.searchpeoplefree.com)",
+      "Bash(python -c \"import json; d=json.load\\(open\\(''brokers/registry.json''\\)\\); [print\\(f\"\"{b[''id'']:30} handler={b[''handler'']}\"\"\\) for b in d[''brokers'']]\")",
+      "WebFetch(domain:databrokerswatch.org)"
     ]
   }
 }
