@@ -14,3 +14,8 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
 
 SMTP_CONFIGURED = bool(SMTP_USER and SMTP_PASS)
+
+# Optional: CapSolver API key for automated CAPTCHA solving
+# Get yours at https://capsolver.com — ~$0.80/1000 Turnstile, $1/1000 reCAPTCHA v2
+CAPSOLVER_API_KEY = os.getenv("CAPSOLVER_API_KEY", "")
+CAPSOLVER_CONFIGURED = bool(CAPSOLVER_API_KEY)

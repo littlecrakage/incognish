@@ -1,20 +1,21 @@
 """
 TruePeopleSearch opt-out handler.
-Flow: search for the person → grab their profile URL → submit removal.
-Falls back to manual_required if Playwright is unavailable or profile not found.
+Flow: search for the person → grab profile URL → submit removal.
+Uses stealthy browser to bypass bot detection.
 """
-from brokers.handlers.base import BaseHandler
+from brokers.handlers.base import BaseHandler, make_stealthy_page, is_bot_wall
+
+OPT_OUT_URL = "https://www.truepeoplesearch.com/removal"
 
 
 class Handler(BaseHandler):
     def submit(self) -> dict:
         try:
-            from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+            from playwright.sync_api import sync_playwright
         except ImportError:
             return {
                 "status": "manual_required",
-                "notes": "Playwright not installed. Run: playwright install chromium. "
-                         "Manual URL: https://www.truepeoplesearch.com/removal",
+                "notes": f"Playwright not installed. Run: playwright install chromium. Manual URL: {OPT_OUT_URL}",
             }
 
         if not self.full_name or not self.state:
@@ -25,45 +26,49 @@ class Handler(BaseHandler):
 
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.set_extra_http_headers({"User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                )})
+                browser, page = make_stealthy_page(p)
 
                 # Step 1: Search for the person
                 search_url = (
                     f"https://www.truepeoplesearch.com/results?"
-                    f"name={self.full_name.replace(' ', '+')}"
-                    f"&citystatezip={self.state}"
+                    f"name={self.full_name.replace(' ', '+')}&citystatezip={self.state}"
                 )
                 page.goto(search_url, timeout=30000)
                 page.wait_for_load_state("networkidle", timeout=20000)
 
-                # Find the first matching result card
+                if is_bot_wall(page.title()):
+                    browser.close()
+                    return {
+                        "status": "manual_required",
+                        "notes": f"Site blocked automated access (Cloudflare). Visit {OPT_OUT_URL} manually.",
+                    }
+
                 cards = page.query_selector_all("a.detail-block-link")
                 if not cards:
                     browser.close()
                     return {
                         "status": "manual_required",
-                        "notes": (
-                            "No listings found automatically. "
-                            "Visit https://www.truepeoplesearch.com/removal manually."
-                        ),
+                        "notes": f"No listings found automatically. Visit {OPT_OUT_URL} manually.",
                     }
 
                 profile_url = cards[0].get_attribute("href")
                 if not profile_url.startswith("http"):
                     profile_url = "https://www.truepeoplesearch.com" + profile_url
 
-                # Step 2: Go to the removal page and submit
-                page.goto("https://www.truepeoplesearch.com/removal", timeout=30000)
+                # Step 2: Submit removal form
+                page.goto(OPT_OUT_URL, timeout=30000)
                 page.wait_for_load_state("networkidle", timeout=20000)
 
-                # Fill in the profile URL field
-                url_input = page.query_selector("input[name='RecordPath'], input[placeholder*='URL'], input[type='url']")
+                if is_bot_wall(page.title()):
+                    browser.close()
+                    return {
+                        "status": "manual_required",
+                        "notes": f"Removal page blocked by Cloudflare. Visit {OPT_OUT_URL} and paste: {profile_url}",
+                    }
+
+                url_input = page.query_selector(
+                    "input[name='RecordPath'], input[placeholder*='URL'], input[type='url']"
+                )
                 if url_input:
                     url_input.fill(profile_url)
                     submit_btn = page.query_selector("button[type='submit'], input[type='submit']")
@@ -79,17 +84,11 @@ class Handler(BaseHandler):
                 browser.close()
                 return {
                     "status": "manual_required",
-                    "notes": (
-                        f"Found profile at {profile_url} but could not submit form automatically. "
-                        "Visit https://www.truepeoplesearch.com/removal and paste that URL."
-                    ),
+                    "notes": f"Found profile at {profile_url} but could not submit form. Visit {OPT_OUT_URL} and paste that URL.",
                 }
 
         except Exception as exc:
             return {
                 "status": "manual_required",
-                "notes": (
-                    f"Automation failed ({exc}). "
-                    "Visit https://www.truepeoplesearch.com/removal manually."
-                ),
+                "notes": f"Automation failed ({exc}). Visit {OPT_OUT_URL} manually.",
             }
