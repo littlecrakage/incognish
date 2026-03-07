@@ -1,4 +1,4 @@
-# 🔒 Incognish
+# 🔒 Incognish (ABANDONNED Data-brokers make it too hard to automate deletion request)
 
 A self-hosted, personal data-broker opt-out tracker.
 Automates removal requests to 49 data brokers and tracks every request status over time.
